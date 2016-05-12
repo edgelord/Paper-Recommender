@@ -1,5 +1,10 @@
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.neighbors import LSHForest
 import cPickle as pickle
+import os
+import re
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from lda import LDA
 
 class Paper:
     def __init__(self, xml):
@@ -45,14 +50,7 @@ def extract_section(f):
     # return header, "".join(body).replace("-\n","").replace("\n"," ").replace("&apos;", " ").replace("")
 
 
-def parse_doc(xml):
-    f = file(xml)
-
 corpus_dir = "../resources/xmls/"
-import os
-import re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from lda import LDA
 
 class Corpus:
     def __init__(self, corp_dir = corpus_dir):
@@ -64,7 +62,10 @@ class Corpus:
         return self.texts
 
 def get_tfidf(corpus):
-    tfidf = TfidfVectorizer(sublinear_tf=True, stop_words = "english")
+    tfidf = TfidfVectorizer(sublinear_tf=True, stop_words = "english", min_df=.08)
+    return tfidf.fit_transform(corpus.get_texts())
+def get_counts(corpus):
+    tfidf = CountVectorizer(stop_words="english", min_df = .15, max_df = .8)
     return tfidf.fit_transform(corpus.get_texts())
 
 def load_corpus():
@@ -104,3 +105,25 @@ def recomend_similar(corpus, doc_id, nn, tfdf):
     for id_ in ids:
         print id_, corpus.corpus[id_].title
     return ids
+
+class Recommender:
+    def __init__(self, corpus=None, mtx = None, nn = None):
+        self.corpus = corpus
+        self.mtx = mtx
+        self.nn = nn
+    def set_mtx(self,mtx, nn = LSHForest()):
+        self.mtx = mtx
+    def fit_nn(self, nn=LSHForest()):
+        self.nn = nn
+        self.nn.fit(self.mtx)
+    def recomend(self, doc_id, show=True):
+        _, [ids] = self.nn.kneighbors(self.mtx[doc_id])
+        if show:
+            for id_ in ids:
+                print id_, self.corpus.corpus[id_].title
+        return ids
+    def search(self, query_str):
+        terms = query_str.replace("*","")
+        return query(self.corpus, terms)
+    def backup(self, outfile = "RecommenderBackup"):
+        pickle.dump(self, file(outfile, mode="w"))
